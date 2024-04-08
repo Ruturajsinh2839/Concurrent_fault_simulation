@@ -70,9 +70,9 @@ bool Convert_string_present(string input, char del, vector<string> types)
     {
         if (find(types.begin(), types.end(), word) != types.end())
             return 1;
-        else
-            return 0;
+        
     }
+    return 0;
 }
 Verilog_File Convert_file(string file_name)
 {

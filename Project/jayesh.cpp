@@ -6,6 +6,30 @@ int No_input = 0;
 vector<string> types_wire = {"input", "wire", "output"};
 vector<string> types_gate = {"nand", "and", "or", "xor", "buf", "not", "nor", "xnor","dum"};
 class Gate;
+struct hash_pair
+{
+
+    template <class T1, class T2>
+
+    size_t operator()(const pair<T1, T2> &p) const
+
+    {
+
+        auto hash1 = hash<T1>{}(p.first);
+
+        auto hash2 = hash<T2>{}(p.second);
+
+        if (hash1 != hash2)
+        {
+
+            return hash1 ^ hash2;
+        }
+
+        // If hash1 == hash2, their XOR is zero.
+
+        return hash1;
+    }
+};
 class Wire
 {
     public:
@@ -31,6 +55,13 @@ public:
     Gate(){
         L=-1;
     }
+};
+
+class Fault_gate_list
+{
+public:
+    string g_name;
+    vector<pair<pair<string, bool>, pair<string, bool>>> fault;
 };
 
 
@@ -370,15 +401,9 @@ bool compute_xor(long long int id)
     return res;
 }
 
-void compute_CUT()
+void compute_CUT( multimap<int,int> &mpp)
 {   
-    multimap<int,int> mpp;
-    
-    for (auto i=File.gate.begin();i!=File.gate.end();i++)
-    {
-       // mpp[i->second.L]=i->first;
-        mpp.insert(pair<int, int>(i->second.L, i->first));
-    }
+   
     long long int size1=mpp.size();
     for (auto i=mpp.begin();i!=mpp.end();i++)
     {
@@ -456,6 +481,258 @@ void compute_CUT()
     }
 }
 
+void Find_Fault_List(unordered_map<pair<string, bool>, bool, hash_pair> &mp_fault_list, vector<Fault_gate_list> fault)
+{
+    for (auto i : fault)
+    {
+        for (auto j : i.fault)
+        {
+
+            if (mp_fault_list[j.second] == true)
+            {
+                mp_fault_list[j.first] = true;
+                continue;
+            }
+            // mp_fault_list[j.first] = false;
+        }
+    }
+}
+
+void concurrent_fault_simulation( multimap<int,int> mpp,vector<Fault_gate_list>&fault)
+{
+    long long int size1=mpp.size();
+    for (auto i=mpp.begin();i!=mpp.end();i++)
+    {
+        long long int id=i->second;
+        Fault_gate_list fault_gate;
+        fault_gate.g_name = File.gate[id].g_name;
+        pair<pair<string, bool>, pair<string, bool>> f1;
+
+          if (File.gate[id].g_type == "nand")
+        {
+            //cout<<"********************************8"<<endl;
+            for(auto j:File.gate[id].input_wires)
+            {
+                File.wire[j].value=!File.wire[j].value;
+                f1.first.first=File.wire[j].w_name;
+                f1.first.second=File.wire[j].value;
+                bool temp = !compute_and(id);
+                f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+                f1.second.second=temp;
+                fault_gate.fault.push_back(f1);
+                File.wire[j].value=!File.wire[j].value;
+
+            }
+           
+            //cout<<"********************************8"<<temp<<endl;
+             f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+             f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+             fault_gate.fault.push_back(f1);
+        }
+        else if (File.gate[id].g_type == "nor")
+        {
+
+            for(auto j:File.gate[id].input_wires)
+            {
+                File.wire[j].value=!File.wire[j].value;
+                f1.first.first=File.wire[j].w_name;
+                f1.first.second=File.wire[j].value;
+                bool temp = !compute_or(id);
+                f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+                f1.second.second=temp;
+                fault_gate.fault.push_back(f1);
+                File.wire[j].value=!File.wire[j].value;
+
+            }
+           
+            //cout<<"********************************8"<<temp<<endl;
+             f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+             f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+             fault_gate.fault.push_back(f1);
+           
+
+            
+        }
+        else if (File.gate[id].g_type == "and")
+        {
+            for(auto j:File.gate[id].input_wires)
+            {
+                File.wire[j].value=!File.wire[j].value;
+                f1.first.first=File.wire[j].w_name;
+                f1.first.second=File.wire[j].value;
+                bool temp = compute_and(id);
+                f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+                f1.second.second=temp;
+                fault_gate.fault.push_back(f1);
+                File.wire[j].value=!File.wire[j].value;
+
+            }
+           
+            //cout<<"********************************8"<<temp<<endl;
+             f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+             f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+             fault_gate.fault.push_back(f1);
+            // bool temp = compute_and(id);
+            // long long int temp1 = File.gate[id].output_wires[0];
+            // File.wire[temp1].value=temp;
+        }
+        else if (File.gate[id].g_type == "or")
+        {
+            for(auto j:File.gate[id].input_wires)
+            {
+                File.wire[j].value=!File.wire[j].value;
+                f1.first.first=File.wire[j].w_name;
+                f1.first.second=File.wire[j].value;
+                bool temp = compute_or(id);
+                f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+                f1.second.second=temp;
+                fault_gate.fault.push_back(f1);
+                File.wire[j].value=!File.wire[j].value;
+
+            }
+           
+            //cout<<"********************************8"<<temp<<endl;
+             f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+             f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+             fault_gate.fault.push_back(f1);
+            // bool temp = compute_or(id);
+            // long long int temp1 = File.gate[id].output_wires[0];
+            // File.wire[temp1].value=temp;
+        }
+        else if (File.gate[id].g_type == "not")
+        {
+            f1.first.first=File.wire[File.gate[id].input_wires[0]].w_name;
+            f1.first.second=!File.wire[File.gate[id].input_wires[0]].value;
+            f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+            f1.second.second=File.wire[File.gate[id].output_wires[0]].value;
+            fault_gate.fault.push_back(f1);
+            // int temp = File.gate[id].input_wires[0];
+            // bool t = File.wire[temp].value;
+
+            f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+            f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+            f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+            f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+            fault_gate.fault.push_back(f1);
+            // int temp1 = File.gate[id].output_wires[0];
+            // File.wire[temp1].value=!t;
+        }
+        else if (File.gate[id].g_type == "buf")
+        {
+            f1.first.first=File.wire[File.gate[id].input_wires[0]].w_name;
+            f1.first.second=!File.wire[File.gate[id].input_wires[0]].value;
+            f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+            f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+            fault_gate.fault.push_back(f1);
+            // int temp = File.gate[id].input_wires[0];
+            // bool t = File.wire[temp].value;
+
+            f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+            f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+            f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+            f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+            fault_gate.fault.push_back(f1);
+
+            // int temp = File.gate[id].input_wires[0];
+            // bool t = File.wire[temp].value;
+            // int temp1 = File.gate[id].output_wires[0];
+            // File.wire[temp1].value=t;
+        }
+        else if (File.gate[id].g_type == "xor")
+        {
+            for(auto j:File.gate[id].input_wires)
+            {
+                File.wire[j].value=!File.wire[j].value;
+                f1.first.first=File.wire[j].w_name;
+                f1.first.second=File.wire[j].value;
+                bool temp = compute_xor(id);
+                f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+                f1.second.second=temp;
+                fault_gate.fault.push_back(f1);
+                File.wire[j].value=!File.wire[j].value;
+
+            }
+           
+            //cout<<"********************************8"<<temp<<endl;
+             f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+             f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+             fault_gate.fault.push_back(f1);
+            // bool temp = compute_xor(id);
+            // long long int temp1 = File.gate[id].output_wires[0];
+            // File.wire[temp1].value=temp;
+
+            
+        }
+        else if (File.gate[id].g_type == "xnor")
+        {
+
+            for(auto j:File.gate[id].input_wires)
+            {
+                File.wire[j].value=!File.wire[j].value;
+                f1.first.first=File.wire[j].w_name;
+                f1.first.second=File.wire[j].value;
+                bool temp = !compute_xor(id);
+                f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+                f1.second.second=temp;
+                fault_gate.fault.push_back(f1);
+                File.wire[j].value=!File.wire[j].value;
+
+            }
+           
+            //cout<<"********************************8"<<temp<<endl;
+             f1.first.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.first.second=!File.wire[File.gate[id].output_wires[0]].value;
+             f1.second.first=File.wire[File.gate[id].output_wires[0]].w_name;
+             f1.second.second=!File.wire[File.gate[id].output_wires[0]].value;
+             fault_gate.fault.push_back(f1);
+
+            // bool temp = !compute_xor(id);
+            // long long int temp1 = File.gate[id].output_wires[0];
+            // File.wire[temp1].value=temp;
+
+            
+        }else if(File.gate[id].g_type == "dum")
+        {
+
+            f1.first.first=File.wire[File.gate[id].input_wires[0]].w_name;
+            f1.first.second=!File.wire[File.gate[id].input_wires[0]].value;
+            
+
+            // int temp = File.gate[id].input_wires[0];
+            bool t = f1.first.second;
+            int size1 =  File.gate[id].output_wires.size();
+            for(long long int k=0;k<size1;k++){
+            f1.second.first=File.wire[File.gate[id].output_wires[k]].w_name;
+            f1.second.second=t;
+            fault_gate.fault.push_back(f1);
+            }
+            
+            for(long long int k=0;k<size1;k++){
+            f1.first.first=File.wire[File.gate[id].output_wires[k]].w_name;
+            f1.first.second=!File.wire[File.gate[id].output_wires[k]].value;
+            f1.second.first=File.wire[File.gate[id].output_wires[k]].w_name;
+            f1.second.second=!File.wire[File.gate[id].output_wires[k]].value;
+            fault_gate.fault.push_back(f1);
+            }
+
+           
+        }
+
+        fault.push_back(fault_gate);
+
+    }
+}
+
 void Print(Verilog_File &File){
     long long int size_gate=File.gate.size();
     long long int size_wire=File.wire.size();
@@ -485,15 +762,63 @@ int main()
         cout<<"ERROR!!: circuit modification error happened.."<<endl;
         // return 0;
     }
-    bool arr[4] = {1,1,1,1};
+    bool arr[5] = {0,1,0,1,1};
     for(long long int i=0;i<No_input;i++){
         // bool t;
         // cout<<"Enter bool value: ";
         // cin>>t;
         File.wire[i+1].value=arr[i];
     }
-     compute_CUT();
-     Print(File);
+    multimap<int,int> mpp;
+    
+    for (auto i=File.gate.begin();i!=File.gate.end();i++)
+    {
+       // mpp[i->second.L]=i->first;
+        mpp.insert(pair<int, int>(i->second.L, i->first));
+    }
+    compute_CUT(mpp);
+
+    Print(File);
+    vector<Fault_gate_list> fault;
+
+    concurrent_fault_simulation(mpp, fault);
+
+    for (auto i : fault)
+    {
+        cout << i.g_name << endl;
+        for (auto j : i.fault)
+        {
+            cout << "(" << j.first.first << "," << j.first.second << ")"
+                 << " (" << j.second.first <<","<<j.second.second<< ")"<<endl;
+        }
+
+        cout << endl
+             << endl;
+    }
+
+    unordered_map<pair<string, bool>, bool, hash_pair> mp_fault_list;
+    reverse(fault.begin(), fault.end());
+    //   cout<<File.output[0]<<File.output[1];
+    for (auto i:File.wire)
+    {
+        if(i.second.w_type=="output"){
+        pair<string, bool> f1;
+        f1.first = i.second.w_name;
+        f1.second = !i.second.value;
+        // cout<<"12"<<f1.first<<","<<f1.second<<endl;
+        mp_fault_list[f1] = true;
+        }
+    }
+
+    Find_Fault_List(mp_fault_list, fault);
+    cout << "{ ";
+    for (auto j : mp_fault_list)
+    {
+        if (j.second == true)
+            cout << "(" << (j.first).first << "," << (j.first).second << ")"
+                 << " ,";
+    }
+    cout << " }";
     //cout<<"34tf"<<endl;
      //cout<<File.gate[2].g_name<<" "<<File.gate[2].L<<endl;
      //cout<<"34tf"<<endl;
